@@ -1,13 +1,41 @@
 'use client';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { WasteReportsTable } from '@/components/tracking/waste-reports-table';
-import { wasteReports } from '@/lib/data';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
 import { Header } from '@/components/layout/header';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/auth-context';
+import type { WasteReport } from '@/lib/types';
 
 export default function TrackingPage() {
+  const { user } = useAuth();
+  const [reports, setReports] = useState<WasteReport[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'wasteReports'),
+      where('farmerId', '==', user.uid),
+      orderBy('reportedAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const reportsData: WasteReport[] = [];
+      querySnapshot.forEach((doc) => {
+        reportsData.push({ id: doc.id, ...doc.data() } as WasteReport);
+      });
+      setReports(reportsData);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -28,7 +56,7 @@ export default function TrackingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <WasteReportsTable reports={wasteReports} />
+                {loading ? <p>Loading reports...</p> : <WasteReportsTable reports={reports} />}
               </CardContent>
             </Card>
           </div>

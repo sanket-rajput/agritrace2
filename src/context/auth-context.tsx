@@ -1,20 +1,31 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  User as FirebaseUser,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import { doc, setDoc, getDoc, serverTimestamp, DocumentData } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+import { useRouter } from 'next/navigation';
 
 type User = {
   uid: string;
   email: string | null;
   role?: 'farmer' | 'agent';
+  name?: string;
 };
 
 type AuthContextType = {
   user: User | null;
   loading: boolean;
-  login: (email: string, pass: string) => void;
+  login: (email: string, pass: string) => Promise<void>;
   signup: (email: string, pass: string) => Promise<void>;
   logout: () => void;
-  setUserRole: (role: 'farmer' | 'agent') => void;
+  setUserRole: (role: 'farmer' | 'agent') => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,57 +33,64 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    // This is a mock implementation.
-    // In a real app, you would check for a stored session (e.g., in localStorage)
-    // and verify it with your backend.
-    const storedUser = localStorage.getItem('agritrace-user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      if (firebaseUser) {
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const userData = userDoc.data() as User;
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            role: userData.role,
+            name: userData.name
+          });
+        } else {
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+          });
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const login = (email: string, pass: string) => {
-    // Mock login. In a real app, this would be an API call to Firebase Auth.
-    console.log(`Logging in with ${email} and ${pass}`);
-    if (email === 'farmer@test.com') {
-      const loggedInUser = { uid: 'farmer123', email, role: 'farmer' as const };
-      setUser(loggedInUser);
-      localStorage.setItem('agritrace-user', JSON.stringify(loggedInUser));
-    } else if (email === 'agent@test.com') {
-       const loggedInUser = { uid: 'agent123', email, role: 'agent' as const };
-       setUser(loggedInUser);
-       localStorage.setItem('agritrace-user', JSON.stringify(loggedInUser));
-    } else {
-      const loggedInUser = { uid: 'newuser123', email };
-      setUser(loggedInUser);
-      localStorage.setItem('agritrace-user', JSON.stringify(loggedInUser));
-    }
+  const login = async (email: string, pass: string) => {
+    await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const signup = async (email: string, pass: string) => {
-    // Mock signup.
-    console.log(`Signing up with ${email} and ${pass}`);
-    const newUser = { uid: `newuser-${Date.now()}`, email };
-    setUser(newUser);
-    localStorage.setItem('agritrace-user', JSON.stringify(newUser));
+    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+    const firebaseUser = userCredential.user;
+    const userDocRef = doc(db, 'users', firebaseUser.uid);
+    await setDoc(userDocRef, {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      createdAt: serverTimestamp(),
+    });
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('agritrace-user');
+  const logout = async () => {
+    await signOut(auth);
+    router.push('/login');
   };
 
-  const setUserRole = (role: 'farmer' | 'agent') => {
+  const setUserRole = async (role: 'farmer' | 'agent') => {
     if (user) {
-      const updatedUser = { ...user, role };
-      setUser(updatedUser);
-      localStorage.setItem('agritrace-user', JSON.stringify(updatedUser));
+      const userDocRef = doc(db, 'users', user.uid);
+      await setDoc(userDocRef, { role: role }, { merge: true });
+      setUser((prevUser) => ({ ...prevUser!, role }));
     }
   };
-
+  
   const value = {
     user,
     loading,

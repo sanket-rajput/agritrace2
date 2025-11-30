@@ -1,16 +1,41 @@
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { RecyclingDashboardTable } from '@/components/recycling/recycling-dashboard-table';
-import { wasteReports } from '@/lib/data';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
 import { Header } from '@/components/layout/header';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/auth-context';
+import type { WasteReport } from '@/lib/types';
 
 export default function RecyclingPage() {
-  const incomingWaste = wasteReports.filter(
-    (r) => r.status !== 'Reported' && r.status !== 'Completed'
-  );
+  const { user } = useAuth();
+  const [reports, setReports] = useState<WasteReport[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // For agents, show all non-completed reports.
+    // In a real-world scenario, you'd likely filter by agent assignment.
+    const q = query(
+      collection(db, 'wasteReports'),
+      where('status', '!=', 'Completed'),
+      orderBy('status'),
+      orderBy('reportedAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const reportsData: WasteReport[] = [];
+      querySnapshot.forEach((doc) => {
+        reportsData.push({ id: doc.id, ...doc.data() } as WasteReport);
+      });
+      setReports(reportsData);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   return (
     <SidebarProvider>
@@ -32,7 +57,7 @@ export default function RecyclingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <RecyclingDashboardTable reports={incomingWaste} />
+                {loading ? <p>Loading collections...</p> : <RecyclingDashboardTable reports={reports} />}
               </CardContent>
             </Card>
           </div>

@@ -1,19 +1,13 @@
 'use client';
 
-import React from 'react';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  XAxis,
-  Tooltip,
-} from 'recharts';
-import {
-  ChartContainer,
-  ChartTooltipContent,
-} from '@/components/ui/chart';
-import { wasteReports } from '@/lib/data';
-import { format, subDays } from 'date-fns';
+import React, { useState, useEffect } from 'react';
+import { Area, AreaChart, CartesianGrid, XAxis, Tooltip } from 'recharts';
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { format, subDays, startOfDay } from 'date-fns';
+import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/auth-context';
+import type { WasteReport } from '@/lib/types';
 
 const chartConfig = {
   quantity: {
@@ -23,25 +17,49 @@ const chartConfig = {
 };
 
 export function CollectionOverTimeChart() {
-  const data = React.useMemo(() => {
+  const { user } = useAuth();
+  const [data, setData] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+
     const thirtyDaysAgo = subDays(new Date(), 30);
-    const relevantReports = wasteReports.filter(
-      (report) => report.lastUpdate >= thirtyDaysAgo && (report.status === 'Completed' || report.status === 'Processing')
-    );
+    let q;
 
-    const dailyData = relevantReports.reduce((acc, report) => {
-      const day = format(report.lastUpdate, 'yyyy-MM-dd');
-      acc[day] = (acc[day] || 0) + report.quantity;
-      return acc;
-    }, {} as Record<string, number>);
+    if (user.role === 'farmer') {
+      q = query(
+        collection(db, 'wasteReports'),
+        where('farmerId', '==', user.uid),
+        where('lastUpdate', '>=', thirtyDaysAgo),
+        where('status', 'in', ['Completed', 'Processing'])
+      );
+    } else {
+      q = query(
+        collection(db, 'wasteReports'),
+        where('lastUpdate', '>=', thirtyDaysAgo),
+        where('status', 'in', ['Completed', 'Processing'])
+      );
+    }
 
-    return Object.entries(dailyData)
-      .map(([date, quantity]) => ({
-        date,
-        quantity,
-      }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, []);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const reports = snapshot.docs.map(doc => doc.data() as WasteReport);
+      
+      const dailyData = reports.reduce((acc, report) => {
+        const date = (report.lastUpdate as Timestamp).toDate();
+        const day = format(startOfDay(date), 'yyyy-MM-dd');
+        acc[day] = (acc[day] || 0) + report.quantity;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const chartData = Object.entries(dailyData)
+        .map(([date, quantity]) => ({ date, quantity }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+      setData(chartData);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   return (
     <ChartContainer config={chartConfig} className="min-h-[300px] w-full">

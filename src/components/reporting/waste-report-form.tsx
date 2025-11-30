@@ -25,9 +25,11 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Tractor } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const formSchema = z.object({
-  farmerName: z.string().min(2, 'Name is too short').max(50, 'Name is too long'),
   cropType: z.enum(['Wheat', 'Corn', 'Rice', 'Sugarcane', 'Cotton']),
   quantity: z.coerce.number().min(0.1, 'Quantity must be at least 0.1 tons'),
   location: z.string().min(5, 'Please provide a more specific location'),
@@ -36,43 +38,56 @@ const formSchema = z.object({
 
 export function WasteReportForm() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      farmerName: '',
       quantity: 1,
       location: '',
       notes: '',
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: 'Report Submitted!',
-      description: `Your request for ${values.quantity} tons of ${values.cropType} has been received.`,
-    });
-    form.reset();
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!user) {
+      toast({
+        variant: 'destructive',
+        title: 'Not Authenticated',
+        description: 'You must be logged in to submit a report.',
+      });
+      return;
+    }
+
+    try {
+      const docRef = await addDoc(collection(db, 'wasteReports'), {
+        ...values,
+        farmerId: user.uid,
+        farmerName: user.name || user.email,
+        status: 'Reported',
+        reportedAt: serverTimestamp(),
+        lastUpdate: serverTimestamp(),
+      });
+
+      toast({
+        title: 'Report Submitted!',
+        description: `Your request (ID: ${docRef.id}) for ${values.quantity} tons of ${values.cropType} has been received.`,
+      });
+      form.reset();
+    } catch (error) {
+      console.error('Error adding document: ', error);
+      toast({
+        variant: 'destructive',
+        title: 'Submission Failed',
+        description: 'There was an error submitting your report. Please try again.',
+      });
+    }
   }
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="farmerName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Farmer Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="John Doe" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
+           <FormField
             control={form.control}
             name="cropType"
             render={({ field }) => (
@@ -99,8 +114,6 @@ export function WasteReportForm() {
               </FormItem>
             )}
           />
-        </div>
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
           <FormField
             control={form.control}
             name="quantity"
@@ -114,7 +127,8 @@ export function WasteReportForm() {
               </FormItem>
             )}
           />
-          <FormField
+        </div>
+        <FormField
             control={form.control}
             name="location"
             render={({ field }) => (
@@ -127,7 +141,6 @@ export function WasteReportForm() {
               </FormItem>
             )}
           />
-        </div>
         <FormField
           control={form.control}
           name="notes"

@@ -18,9 +18,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import type { WasteReport } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { Timestamp } from 'firebase/firestore';
 
 type Props = {
   reports: WasteReport[];
@@ -35,15 +36,13 @@ const statusColors: Record<WasteReport['status'], string> = {
   Completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 };
 
+const formatDate = (date: Date | Timestamp | undefined) => {
+  if (!date) return 'N/A';
+  const jsDate = date instanceof Timestamp ? date.toDate() : date;
+  return formatDistanceToNow(jsDate, { addSuffix: true });
+};
+
 export function WasteReportsTable({ reports }: Props) {
-  const [sortedReports, setSortedReports] = React.useState(reports);
-
-  React.useEffect(() => {
-    setSortedReports(
-      [...reports].sort((a, b) => b.lastUpdate.getTime() - a.lastUpdate.getTime())
-    );
-  }, [reports]);
-
   return (
     <div className="rounded-md border">
       <Table>
@@ -61,9 +60,9 @@ export function WasteReportsTable({ reports }: Props) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedReports.map((report) => (
+          {reports.map((report) => (
             <TableRow key={report.id}>
-              <TableCell className="font-medium">{report.id}</TableCell>
+              <TableCell className="font-medium">{report.id.substring(0, 7)}...</TableCell>
               <TableCell>{report.farmerName}</TableCell>
               <TableCell>{report.cropType}</TableCell>
               <TableCell className="text-right">{report.quantity}</TableCell>
@@ -79,7 +78,7 @@ export function WasteReportsTable({ reports }: Props) {
                 </Badge>
               </TableCell>
               <TableCell>
-                {formatDistanceToNow(report.lastUpdate, { addSuffix: true })}
+                {formatDate(report.lastUpdate)}
               </TableCell>
               <TableCell>
                 <DropdownMenu>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/context/auth-context';
+import NextTopLoader from 'nextjs-toploader';
 
 export const metadata: Metadata = {
   title: 'AgriTrace Connect',
@@ -28,6 +29,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
+        <NextTopLoader color="hsl(var(--primary))" />
         <AuthProvider>
           <main>{children}</main>
           <Toaster />

@@ -21,10 +21,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal } from 'lucide-react';
-import { format } from 'date-fns';
 import type { WasteReport } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/auth-context';
 
 type Props = {
   reports: WasteReport[];
@@ -39,26 +41,44 @@ const statusColors: Record<WasteReport['status'], string> = {
   Completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 };
 
-const availableStatuses: WasteReport['status'][] = [
+const agentUpdateableStatuses: WasteReport['status'][] = [
+  'Collected',
+  'In-Transit',
   'Received',
   'Processing',
   'Completed',
 ];
 
-export function RecyclingDashboardTable({ reports: initialReports }: Props) {
-  const [reports, setReports] = React.useState(initialReports);
+export function RecyclingDashboardTable({ reports }: Props) {
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const handleStatusUpdate = (reportId: string, newStatus: WasteReport['status']) => {
-    setReports((prevReports) =>
-      prevReports.map((report) =>
-        report.id === reportId ? { ...report, status: newStatus, lastUpdate: new Date() } : report
-      )
-    );
-    toast({
-      title: 'Status Updated',
-      description: `Report ${reportId} has been updated to "${newStatus}".`,
-    });
+  const handleStatusUpdate = async (reportId: string, newStatus: WasteReport['status']) => {
+    if (!user) return;
+    
+    const reportRef = doc(db, 'wasteReports', reportId);
+    try {
+      const updateData: any = {
+        status: newStatus,
+        lastUpdate: serverTimestamp(),
+      };
+      if (newStatus === 'Collected') {
+        updateData.collectionAgent = user.name || user.email;
+        updateData.collectionAgentId = user.uid;
+      }
+      await updateDoc(reportRef, updateData);
+      toast({
+        title: 'Status Updated',
+        description: `Report ${reportId.substring(0,7)} has been updated to "${newStatus}".`,
+      });
+    } catch (error) {
+      console.error("Error updating status: ", error);
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: 'Could not update the report status.',
+      });
+    }
   };
 
   return (
@@ -67,7 +87,7 @@ export function RecyclingDashboardTable({ reports: initialReports }: Props) {
         <TableHeader>
           <TableRow>
             <TableHead>Report ID</TableHead>
-            <TableHead>Agent</TableHead>
+            <TableHead>Farmer</TableHead>
             <TableHead>Crop Type</TableHead>
             <TableHead className="text-right">Quantity (t)</TableHead>
             <TableHead>Status</TableHead>
@@ -79,8 +99,8 @@ export function RecyclingDashboardTable({ reports: initialReports }: Props) {
         <TableBody>
           {reports.map((report) => (
             <TableRow key={report.id}>
-              <TableCell className="font-medium">{report.id}</TableCell>
-              <TableCell>{report.collectionAgent}</TableCell>
+              <TableCell className="font-medium">{report.id.substring(0, 7)}...</TableCell>
+              <TableCell>{report.farmerName}</TableCell>
               <TableCell>{report.cropType}</TableCell>
               <TableCell className="text-right">{report.quantity}</TableCell>
               <TableCell>
@@ -107,7 +127,7 @@ export function RecyclingDashboardTable({ reports: initialReports }: Props) {
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger>Update Status</DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
-                        {availableStatuses.map((status) => (
+                        {agentUpdateableStatuses.map((status) => (
                           <DropdownMenuItem
                             key={status}
                             disabled={report.status === status}

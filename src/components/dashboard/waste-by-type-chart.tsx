@@ -1,20 +1,12 @@
 'use client';
 
-import React from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from 'recharts';
-import {
-  ChartContainer,
-  ChartTooltipContent,
-} from '@/components/ui/chart';
-import { wasteReports } from '@/lib/data';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/auth-context';
+import type { WasteReport } from '@/lib/types';
 
 const chartConfig = {
   quantity: {
@@ -24,17 +16,38 @@ const chartConfig = {
 };
 
 export function WasteByTypeChart() {
-  const data = React.useMemo(() => {
-    const wasteByType = wasteReports.reduce((acc, report) => {
-      acc[report.cropType] = (acc[report.cropType] || 0) + report.quantity;
-      return acc;
-    }, {} as Record<string, number>);
+  const { user } = useAuth();
+  const [data, setData] = useState<any[]>([]);
 
-    return Object.entries(wasteByType).map(([cropType, quantity]) => ({
-      cropType,
-      quantity,
-    }));
-  }, []);
+  useEffect(() => {
+    if (!user) return;
+    
+    let q;
+    if (user.role === 'farmer') {
+      q = query(collection(db, 'wasteReports'), where('farmerId', '==', user.uid));
+    } else {
+      q = query(collection(db, 'wasteReports'));
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const reports = snapshot.docs.map(doc => doc.data() as WasteReport);
+
+      const wasteByType = reports.reduce((acc, report) => {
+        acc[report.cropType] = (acc[report.cropType] || 0) + report.quantity;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const chartData = Object.entries(wasteByType).map(([cropType, quantity]) => ({
+        cropType,
+        quantity,
+      }));
+      
+      setData(chartData);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
 
   return (
     <ChartContainer config={chartConfig} className="min-h-[300px] w-full">

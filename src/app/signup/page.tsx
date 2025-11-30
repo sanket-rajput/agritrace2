@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Leaf } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -21,14 +22,25 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const router = useRouter();
   const { signup } = useAuth();
+  const { toast } = useToast();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
       await signup(email, password);
+      toast({
+        title: 'Signup Successful',
+        description: 'Please choose your role to continue.',
+      });
       router.push('/role-selection');
     } catch (err: any) {
       setError(err.message);
+      toast({
+        variant: 'destructive',
+        title: 'Signup Failed',
+        description: err.message,
+      });
     }
   };
 

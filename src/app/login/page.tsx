@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Leaf } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,14 +22,25 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const router = useRouter();
   const { login } = useAuth();
+  const { toast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
-      login(email, password);
+      await login(email, password);
+      toast({
+        title: 'Login Successful',
+        description: 'Welcome back!',
+      });
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message);
+      toast({
+        variant: 'destructive',
+        title: 'Login Failed',
+        description: err.message,
+      });
     }
   };
 

@@ -13,22 +13,38 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context';
 import { Leaf, Tractor } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function RoleSelectionPage() {
   const [role, setRole] = useState<'farmer' | 'agent'>();
   const [error, setError] = useState('');
   const router = useRouter();
   const { user, setUserRole } = useAuth();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (!role) {
       setError('Please select a role.');
       return;
     }
     if (user) {
-      setUserRole(role);
-      router.push('/dashboard');
+      try {
+        await setUserRole(role);
+        toast({
+          title: 'Role Selected',
+          description: `You are now registered as a ${role}.`,
+        });
+        router.push('/dashboard');
+      } catch (err: any) {
+        setError(err.message);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to set user role.',
+        });
+      }
     } else {
       setError('No user session found. Please log in again.');
       router.push('/login');

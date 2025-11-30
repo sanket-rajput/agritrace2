@@ -1,36 +1,44 @@
-import React from 'react';
-import { StatsCards } from '@/components/dashboard/stats-cards';
-import { WasteByTypeChart } from '@/components/dashboard/waste-by-type-chart';
-import { CollectionOverTimeChart } from '@/components/dashboard/collection-over-time-chart';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+'use client';
+import { useAuth } from '@/context/auth-context';
+import { redirect } from 'next/navigation';
+import FarmerDashboard from '@/components/dashboard/farmer-dashboard';
+import AgentDashboard from '@/components/dashboard/agent-dashboard';
+import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarNav } from '@/components/layout/sidebar-nav';
+import { Header } from '@/components/layout/header';
 
 export default function DashboardPage() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  const renderDashboard = () => {
+    switch (user.role) {
+      case 'farmer':
+        return <FarmerDashboard />;
+      case 'agent':
+        return <AgentDashboard />;
+      default:
+        redirect('/role-selection');
+        return null;
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="font-headline text-3xl font-bold tracking-tight">
-        Dashboard
-      </h1>
-
-      <StatsCards />
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Waste by Type</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <WasteByTypeChart />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Collection Volume (Last 30 Days)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CollectionOverTimeChart />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <SidebarProvider>
+      <Sidebar>
+        <SidebarNav />
+      </Sidebar>
+      <SidebarInset className="flex min-h-svh flex-col">
+        <Header />
+        <main className="flex-grow p-4 md:p-6 lg:p-8">{renderDashboard()}</main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

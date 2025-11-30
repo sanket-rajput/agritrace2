@@ -10,17 +10,25 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, Tractor, Map, Recycle, Leaf } from 'lucide-react';
+import { LayoutDashboard, Tractor, Map, Recycle, Leaf, Bot } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
 
-const navItems = [
+const farmerNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/reporting', icon: Tractor, label: 'Waste Reporting' },
   { href: '/tracking', icon: Map, label: 'Tracking' },
-  { href: '/recycling', icon: Recycle, label: 'Recycling Centers' },
+];
+
+const agentNavItems = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/recycling', icon: Recycle, label: 'Assigned Collections' },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const navItems = user?.role === 'farmer' ? farmerNavItems : agentNavItems;
 
   return (
     <>
